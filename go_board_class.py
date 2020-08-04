@@ -70,6 +70,8 @@ class Node:
         pygame.draw.circle(WINDOW, self.color, self.center, RADIUS//3)
 
 
+
+
 class Board():
     def __init__(self):
         self.position = {}
@@ -107,9 +109,9 @@ class Board():
     # board or node method? -> kinda node
     def update_board(self, node):
         for neighbour in node.neighbours:
-            # suicide without enemy neighbours -> check first for enemy groups, then for self.group
             if node.color != neighbour.color and neighbour.color != None:
                 neighbour.group = neighbour.get_group([])
+
                 if not neighbour.has_liberty():
                     for stone in neighbour.group:
                         self.remove_stone(stone)
@@ -119,11 +121,9 @@ class Board():
             print('suicide')
             for stone in node.group:
                 self.remove_stone(stone)
-
-        
             
 
-    def draw(self, last_stone):
+    def draw(self, moves):
         WINDOW.fill(ORANGE)
         for row in range(ROWS):
             pygame.draw.line(WINDOW,
@@ -137,6 +137,7 @@ class Board():
                              (col*NODE_WIDTH + RADIUS, 0 + RADIUS),
                              (col*NODE_WIDTH + RADIUS, NODE_WIDTH*ROWS - RADIUS))
 
+        #tengen
         pygame.draw.circle(WINDOW,
                            BLACK,
                            (ROWS//2*NODE_WIDTH + RADIUS, ROWS//2*NODE_WIDTH + RADIUS),
@@ -145,8 +146,9 @@ class Board():
         for node in self.position.values():
             node.draw()
 
-        if last_stone:
-            last_stone.draw_last_move()
+        if len(moves) > 0:
+            #print(moves[-1].color)
+            moves[-1].draw_last_move()
                 
         pygame.display.update()
 
@@ -154,43 +156,48 @@ class Board():
 
 def main():
     board = Board()
-##    for node in self.position.values():
-##            node.update_neighbours(self)
         
     turn = 'black'
-    last_stone = None
     run = True
+    moves = []
+    moves_cache = []
 
     while run:
-        board.draw(last_stone)
+        board.draw(moves)
         
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 run = False
 
-            if pygame.mouse.get_pressed()[0]:
+            if event.type == pygame.MOUSEBUTTONDOWN:
                 pos = pygame.mouse.get_pos()
                 node = board.get_clicked_node(pos)
-                last_stone = node
-                
-                if node.color == None:
-                    board.place_stone(node, turn)
-                    turn = 'black' if turn == 'white' else 'white'
-                    board.update_board(node)                        
-    
-            elif pygame.mouse.get_pressed()[1]:
-                #remove last move, not any move clicked on
-                pos = pygame.mouse.get_pos() # redundant
-                node = board.get_clicked_node(pos)
-                print(node)
-                print(node.group, node.has_liberty())
+                if event.button == 1:
+                    if node.color == None:
+                        board.place_stone(node, turn)
+                        moves.append(node)
+                        turn = 'black' if turn == 'white' else 'white'
+                        board.update_board(node)
 
-            elif pygame.mouse.get_pressed()[2]:
-                #remove last move, not any move clicked on
-                pos = pygame.mouse.get_pos() # redundant
-                node = board.get_clicked_node(pos)
-                if node.color != None:
-                    board.remove_stone(node)
+                elif event.button == 3:
+                    print(node)
+                    print(node.group, node.has_liberty())
+                    
+                elif event.button == 4: # scroll up
+                    if len(moves_cache) > 0:
+                        next_move = moves_cache.pop()
+                        moves.append(next_move)
+                        board.place_stone(next_move, turn)
+                        turn = 'black' if turn == 'white' else 'white'
+                        
+                elif event.button == 5: # scroll down
+                    # *** bring back dead stones ***
+                    if len(moves) > 0:
+                        last_move = moves.pop()
+                        board.remove_stone(last_move)
+                        moves_cache.append(last_move)
+                        turn = 'black' if turn == 'white' else 'white'
+                
 
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
