@@ -107,13 +107,14 @@ class Board():
          
 
     # board or node method? -> kinda node
-    def update_board(self, node):
+    def update_board(self, node, moves):
         for neighbour in node.neighbours:
             if node.color != neighbour.color and neighbour.color != None:
                 neighbour.group = neighbour.get_group([])
 
                 if not neighbour.has_liberty():
                     for stone in neighbour.group:
+                        moves[-1].append(stone)
                         self.remove_stone(stone)
                         
         node.group = node.get_group([])
@@ -148,7 +149,7 @@ class Board():
 
         if len(moves) > 0:
             #print(moves[-1].color)
-            moves[-1].draw_last_move()
+            moves[-1][0].draw_last_move()
                 
         pygame.display.update()
 
@@ -175,9 +176,9 @@ def main():
                 if event.button == 1:
                     if node.color == None:
                         board.place_stone(node, turn)
-                        moves.append(node)
+                        moves.append([node])
                         turn = 'black' if turn == 'white' else 'white'
-                        board.update_board(node)
+                        board.update_board(node, moves)
 
                 elif event.button == 3:
                     print(node)
@@ -185,17 +186,31 @@ def main():
                     
                 elif event.button == 4: # scroll up
                     if len(moves_cache) > 0:
-                        next_move = moves_cache.pop()
-                        moves.append(next_move)
+                        next_change = moves_cache.pop()
+                        next_move = next_change[0]
                         board.place_stone(next_move, turn)
+
+                        if len(next_change) > 1:
+                            next_removed = next_change[1:]
+                            for stone in next_removed:
+                                board.remove_stone(stone)
+
+                        moves.append(next_change)
+                        
                         turn = 'black' if turn == 'white' else 'white'
                         
                 elif event.button == 5: # scroll down
-                    # *** bring back dead stones ***
                     if len(moves) > 0:
-                        last_move = moves.pop()
+                        last_change = moves.pop()
+                        last_move = last_change[0]
                         board.remove_stone(last_move)
-                        moves_cache.append(last_move)
+                        
+                        if len(last_change) > 1:
+                            last_removed = last_change[1:]
+                            for stone in last_removed:
+                                board.place_stone(stone, turn)
+                        
+                        moves_cache.append(last_change)
                         turn = 'black' if turn == 'white' else 'white'
                 
 
