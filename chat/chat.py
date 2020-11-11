@@ -2,6 +2,7 @@ import pygame
 import sys
 import os
 import socket
+import errno
 
 
 # Socket Stuff
@@ -44,40 +45,46 @@ class Button():
                and self.y <= mouse[1] <= self.y + self.h
 
     
-    def render_font(self):
+    def render_font(self, align):
         self.label = self.font.render(self.msg, 1, (25,25,25))
         self.label_rect = self.label.get_rect()
-        self.label_rect.center = ((self.x+(self.w//2)),
-                                  (self.y+(self.h//2)))
+        if not align:
+            self.label_rect.center = ((self.x+(self.w//2)),
+                                      (self.y+(self.h//2)))
+        if align == 'left':
+            self.label_rect.midleft = (self.x+20,
+                                      (self.y+(self.h//2)))
 
         self.window.blit(self.label, self.label_rect)
 
 
-    def draw(self):
+    def draw(self, align=None):
         if self.check():
             pygame.draw.rect(self.window, self.ac, self.rect)
         else:
             pygame.draw.rect(self.window, self.ic, self.rect)
 
-        self.render_font()
+        self.render_font(align)
         
 
-    def draw_clicked(self):
+    def draw_clicked(self, align=None):
         pygame.draw.rect(self.window, self.ac,
-                             (self.x, self.y, self.w, self.h))
-        self.render_font()
+                         (self.x, self.y, self.w, self.h))
+        
+        self.render_font(align)
     
 
     def is_clicked(self, action=None, args=None):
-        if self.check() and pygame.mouse.get_pressed()[0] == 1:
+        if self.check():
             if args:
                 action(*args)
             else:
                 action()
+            return True
 
 
 
-def typing(button, limit=280):
+def typing(button, align=None, limit=280):
     typing = True
     message = ''
     
@@ -101,7 +108,7 @@ def typing(button, limit=280):
                         message += event.unicode
 
             button.msg = message + '_'
-            button.draw_clicked()
+            button.draw_clicked(align)
             pygame.display.update(button.rect)
             
 
@@ -114,10 +121,13 @@ def connect_to_chat(username, ip, port): #button.msg x 3
         
         username_header = f'{len(username):<{HEADERSIZE}}'.encode('utf-8')
         client_socket.send(username_header + username.encode('utf-8'))
-        chat(client_socket)
+        print('Successfully Connected...')
         
     except:
         print('Connection failed!')
+        return None
+
+    chat(client_socket)
 
 
 def menu():
@@ -159,8 +169,14 @@ def menu():
         connection_label_rect.center = (int(WIDTH*.5), int(HEIGHT*.4))
         WINDOW.blit(connection_label, connection_label_rect)
         
-
+        
         # Buttons n stuff ----------------------------------------- #
+        username_button.draw()
+        ip_button.draw()
+        port_button.draw()
+        connect_button.draw()
+
+        # Events n stuff ------------------------------------------ #
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -171,29 +187,17 @@ def menu():
                     pygame.quit()
                     sys.exit()
 
-        
 
-        username_button.draw()
-        username_button.is_clicked(action=typing, args=(username_button, 20))
+            
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1:
+                    username_button.is_clicked(action=typing, args=(username_button, None, 20))
+                    ip_button.is_clicked(action=typing, args=(ip_button, None, 12))
+                    port_button.is_clicked(action=typing, args=(port_button, None, 6))
+                    connect_button.is_clicked(action=connect_to_chat, args=(username_button.msg,
+                                                                            ip_button.msg,
+                                                                            port_button.msg))
 
-        ip_button.draw()
-        ip_button.is_clicked(action=typing, args=(ip_button, 12))
-
-        port_button.draw()
-        port_button.is_clicked(action=typing, args=(port_button, 6))
-
-        connect_button.draw()
-        connect_button.is_clicked(action=connect_to_chat, args=(username_button.msg,
-                                                                ip_button.msg,
-                                                                port_button.msg))
-
-        
-
-
-
-
-    
-                            
         ##menu_label = menu_font.render('Some Menu Title', False, (0,0,0))
         
         # Update window ------------------------------------------- #
@@ -202,9 +206,18 @@ def menu():
 
 
 def chat(client_socket):
+    message_button = Button(WINDOW,
+                            '>',
+                            menu_font,
+                            50,int(HEIGHT*.8),WIDTH-100,100,
+                            (180,180,180),(240,240,240),
+                            )
+    
     run = True
     while run:
         WINDOW.fill((25,25,25))
+        message_button.draw('left')
+        pygame.display.update()
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -215,8 +228,53 @@ def chat(client_socket):
                 if event.key == pygame.K_ESCAPE:
                     run = False
                     client_socket.close()
+
+            # Type and send message            
+            
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1:                        
+                    message = message_button.is_clicked(action=typing,
+                                                        args=(message_button, 'left'))
+
+                    ''' send things to server'''
+                    if message:
+                        message = message_button.msg.encode('utf-8')
+                        message_header = f'{len(message):<{HEADERSIZE}}'.encode('utf-8')
+                        client_socket.send(message_header + message)
+                        message_button.msg = '>'
+
+        if run:            
+            try:
+                ''' receive things from server '''
+                # server sends to user
+                sender_header = client_socket.recv(HEADERSIZE)
+                if not sender_header: #when?
+                    print('Connection closed by the server')
+                    sys.exit()
                     
-        pygame.display.update()
+                sender_length = int(sender_header.decode('utf-8').strip())
+                sender = client_socket.recv(sender_length).decode('utf-8')
+
+                message_header = client_socket.recv(HEADERSIZE)
+                message_length = int(message_header.decode('utf-8').strip())
+                message = client_socket.recv(message_length).decode('utf-8')
+
+                print(f'{sender} > {message}')
+
+                    
+            except IOError as e:
+                if e.errno != errno.EAGAIN and e.errno != errno.EWOULDBLOCK:
+                    # above errors: when there are no more messages to receive
+                    # if not one of these:
+                    print('Reading Error', str(e))
+                    sys.exit()
+
+                    
+            except Exception as e:
+                print('General Error', str(e))
+                sys.exit()
+
+        
         main_clock.tick(FPS)
 
     
