@@ -3,6 +3,7 @@ import sys
 import os
 import socket
 import errno
+import threading
 
 
 # Socket Stuff
@@ -11,23 +12,29 @@ HEADERSIZE = 10
 
 # Setup Window ------------------------------------------------ #
 pygame.init()
-SIZE = WIDTH, HEIGHT = 450, 600
+SIZE = WIDTH, HEIGHT = 800, 450
+LEFT_SPACE = int(WIDTH*0.05)
 
 FPS = 60
 main_clock = pygame.time.Clock()
 
 WINDOW = pygame.display.set_mode((SIZE))
+CHAT_WINDOW = pygame.Surface((int(WIDTH*0.7), int(HEIGHT*0.65)))
+USER_WINDOW = pygame.Surface((int(WIDTH*0.175), int(HEIGHT*0.65)))
 pygame.display.set_caption('Chat')
 
 #IMG = pygame.image.load(os.path.join('assets', 'IMG.png'))
-menu_font = pygame.font.SysFont('Matura MT Script Capitals', 60, 1)
-##menu_label = menu_font.render('Some Menu Title', False, (0,0,0))
+MENU_FONT = pygame.font.SysFont('Matura MT Script Capitals',
+                                min(60, int((HEIGHT/450)*60)), 1)
+CHAT_FONT = pygame.font.SysFont('Matura MT Script Capitals',
+                                min(25, int((HEIGHT/450)*25)), 1)
 
 
 class Button():
     def __init__(self, window, msg, font, x, y, w, h, ac, ic):
         self.window = window
         self.msg = msg
+        self.default_msg = msg
         self.font = font
         self.x = x
         self.y = y
@@ -52,7 +59,7 @@ class Button():
             self.label_rect.center = ((self.x+(self.w//2)),
                                       (self.y+(self.h//2)))
         if align == 'left':
-            self.label_rect.midleft = (self.x+20,
+            self.label_rect.midleft = (self.x+int(self.w*0.01),
                                       (self.y+(self.h//2)))
 
         self.window.blit(self.label, self.label_rect)
@@ -83,10 +90,46 @@ class Button():
             return True
 
 
+def draw_chat_window(chat_history):
+    CHAT_WINDOW.fill((240,240,240))
+    for i, line in enumerate(chat_history):
+        chat_line = CHAT_FONT.render(line, True, (25,25,25))
+        chat_line_rect = chat_line.get_rect()
+        CHAT_WINDOW.blit(chat_line,
+                         ( int(CHAT_WINDOW.get_width()*0.01),
+                           int(HEIGHT*0.65-(chat_line_rect[3]+HEIGHT*0.01)*(len(chat_history)-i))
+                           )
+                         )
 
-def typing(button, align=None, limit=280):
+
+def draw_user_window(usernames):
+    USER_WINDOW.fill((240,240,240))
+    usernames = usernames.split(',')
+    for i, user in enumerate(usernames):
+        user_line = CHAT_FONT.render(user, True, (25,25,25))
+        user_line_rect = user_line.get_rect()
+        USER_WINDOW.blit(user_line,
+                         ( int(USER_WINDOW.get_width()*0.01),
+                           int(HEIGHT*0.01+(user_line_rect[3]+HEIGHT*0.01)*i)
+                           )
+                         )
+    
+
+def draw_main_window(message_button, username):
+    WINDOW.fill((25,25,25))
+    WINDOW.blit(CHAT_WINDOW, (LEFT_SPACE, int(HEIGHT*0.1)))
+    WINDOW.blit(USER_WINDOW, (LEFT_SPACE+CHAT_WINDOW.get_width()+int(LEFT_SPACE/2),
+                              int(HEIGHT*0.1)))
+    
+    message_button.draw('left')
+    username_label = CHAT_FONT.render(f'You are connected as: {username}', 1, (255, 180, 80))
+    WINDOW.blit(username_label, (LEFT_SPACE, int(HEIGHT*.9)))
+
+    pygame.display.update()
+    
+
+def typing(button, message='', align=None, limit=280):
     typing = True
-    message = ''
     
     while typing:
         for event in pygame.event.get():
@@ -100,7 +143,10 @@ def typing(button, align=None, limit=280):
                         break
                     elif event.key == pygame.K_RETURN:
                         typing = False
-                        button.msg = message
+                        if message:
+                            button.msg = message
+                        else:
+                            button.msg = button.default_msg
                         break
                     elif event.key == pygame.K_BACKSPACE:
                         message = message[:-1]
@@ -121,41 +167,47 @@ def connect_to_chat(username, ip, port): #button.msg x 3
         
         username_header = f'{len(username):<{HEADERSIZE}}'.encode('utf-8')
         client_socket.send(username_header + username.encode('utf-8'))
+        
         print('Successfully Connected...')
         
-    except:
+    except Exception as e:
         print('Connection failed!')
+        print(e)
         return None
 
-    chat(client_socket)
+    chat(client_socket, username)
 
 
 def menu():
     username_button = Button(WINDOW,
                              'Enter Name',
-                             menu_font,
-                             50,int(HEIGHT*.1),WIDTH-100,100,
+                             MENU_FONT,
+                             LEFT_SPACE, int(HEIGHT*.1),
+                             WIDTH-LEFT_SPACE*2, int(HEIGHT*.15),
                              (180,180,180),(240,240,240),
                              )
 
     ip_button = Button(WINDOW,
                        socket.gethostname(),
-                       menu_font,
-                       50,int(HEIGHT*.46),WIDTH-100,80,
+                       MENU_FONT,
+                       LEFT_SPACE,int(HEIGHT*.46),
+                       WIDTH-LEFT_SPACE*2,int(HEIGHT*.1),
                        (180,180,180),(240,240,240),
                        )
 
     port_button = Button(WINDOW,
                          '1234',
-                         menu_font,
-                         50,int(HEIGHT*.6),WIDTH-100,80,
+                         MENU_FONT,
+                         LEFT_SPACE,int(HEIGHT*.6),
+                         WIDTH-LEFT_SPACE*2,int(HEIGHT*.1),
                          (180,180,180),(240,240,240),
                          )
 
     connect_button = Button(WINDOW,
                             'connect',
-                            menu_font,
-                            100,int(HEIGHT*.8),WIDTH-200,50,
+                            MENU_FONT,
+                            LEFT_SPACE*2,int(HEIGHT*.8),
+                            WIDTH-LEFT_SPACE*4,int(HEIGHT*.1),
                             (180,180,180),(240,240,240),
                             )
 
@@ -164,9 +216,9 @@ def menu():
 
         # Background ---------------------------------------------- #
         WINDOW.fill((25,25,25))
-        connection_label = menu_font.render('Connect to Server', 1, (255, 180, 80))
+        connection_label = MENU_FONT.render('Connect to Server', 1, (255, 180, 80))
         connection_label_rect = connection_label.get_rect()
-        connection_label_rect.center = (int(WIDTH*.5), int(HEIGHT*.4))
+        connection_label_rect.center = (int(WIDTH*.5), int(HEIGHT*.35))
         WINDOW.blit(connection_label, connection_label_rect)
         
         
@@ -191,33 +243,36 @@ def menu():
             
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
-                    username_button.is_clicked(action=typing, args=(username_button, None, 20))
-                    ip_button.is_clicked(action=typing, args=(ip_button, None, 12))
-                    port_button.is_clicked(action=typing, args=(port_button, None, 6))
+                    username_button.is_clicked(action=typing, args=(username_button,
+                                                                    '', None, 14))
+                    
+                    ip_button.is_clicked(action=typing, args=(ip_button,
+                                                              '', None, 12))
+                    
+                    port_button.is_clicked(action=typing, args=(port_button,
+                                                                '', None, 6))
+                    
                     connect_button.is_clicked(action=connect_to_chat, args=(username_button.msg,
                                                                             ip_button.msg,
                                                                             port_button.msg))
-
-        ##menu_label = menu_font.render('Some Menu Title', False, (0,0,0))
         
         # Update window ------------------------------------------- #
         pygame.display.update()
         main_clock.tick(FPS)
 
 
-def chat(client_socket):
+def chat(client_socket, username):
+    chat_history = []
+    usernames = ''    
     message_button = Button(WINDOW,
                             '>',
-                            menu_font,
-                            50,int(HEIGHT*.8),WIDTH-100,100,
-                            (180,180,180),(240,240,240),
+                            CHAT_FONT,
+                            LEFT_SPACE,int(HEIGHT*.8),WIDTH-LEFT_SPACE*2,20,
+                            (240,240,240),(240,240,240),
                             )
     
     run = True
     while run:
-        WINDOW.fill((25,25,25))
-        message_button.draw('left')
-        pygame.display.update()
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -229,37 +284,58 @@ def chat(client_socket):
                     run = False
                     client_socket.close()
 
-            # Type and send message            
+                # Type and send message
+                if event.key ==  pygame.K_BACKSPACE:
+                    if len(message_button.msg) > 1:
+                        message_button.msg = message_button.msg[:-1]
             
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                if event.button == 1:                        
-                    message = message_button.is_clicked(action=typing,
-                                                        args=(message_button, 'left'))
-
-                    ''' send things to server'''
-                    if message:
+                elif event.key ==  pygame.K_RETURN:
+                    ''' send things to yourself to be available on server side'''
+                    if message_button.msg != '>':
+                        message_button.msg = message_button.msg[1:]
                         message = message_button.msg.encode('utf-8')
                         message_header = f'{len(message):<{HEADERSIZE}}'.encode('utf-8')
                         client_socket.send(message_header + message)
-                        message_button.msg = '>'
+                        # also locally append to chat history
+                        print(f'{username} > {message_button.msg}')
+                        chat_history.append(f'{username} > {message_button.msg}')
+                        message_button.msg = message_button.default_msg
+
+                else:
+                    if len(message_button.msg) < 35:
+                        message_button.msg += event.unicode
+                    
 
         if run:            
             try:
-                ''' receive things from server '''
-                # server sends to user
-                sender_header = client_socket.recv(HEADERSIZE)
-                if not sender_header: #when?
+                ''' receive things from server (weitergeleitet von anderen clients) '''
+                # other clients (on server) or server send to user
+                message_header = client_socket.recv(HEADERSIZE)
+                if not message_header:
                     print('Connection closed by the server')
-                    sys.exit()
-                    
-                sender_length = int(sender_header.decode('utf-8').strip())
-                sender = client_socket.recv(sender_length).decode('utf-8')
+                    run = False
+                    break
 
+                message_length = int(message_header.decode('utf-8').strip())
+                sender = client_socket.recv(message_length).decode('utf-8')
+                
                 message_header = client_socket.recv(HEADERSIZE)
                 message_length = int(message_header.decode('utf-8').strip())
                 message = client_socket.recv(message_length).decode('utf-8')
 
-                print(f'{sender} > {message}')
+                if message.startswith('USERDISCONNECTED'):
+                    chat_history.append(f'{sender} disconnected')
+                    usernames = message[16:]
+                elif message.startswith('USERCONNECTED'):
+                    if sender == username:
+                        pass
+                    else:
+                        chat_history.append(f'{sender} connected')
+                    usernames = message[13:]
+                else:
+                    print(f'{sender} > {message}')
+                    chat_history.append(f'{sender} > {message}')
+                    
 
                     
             except IOError as e:
@@ -274,6 +350,11 @@ def chat(client_socket):
                 print('General Error', str(e))
                 sys.exit()
 
+        # Draw Stuff        
+        # draw user window
+        draw_chat_window(chat_history)
+        draw_user_window(usernames)
+        draw_main_window(message_button, username)
         
         main_clock.tick(FPS)
 
