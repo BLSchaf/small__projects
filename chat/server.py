@@ -66,7 +66,7 @@ while True:
             
             for client in clients:
                 # Send message (from server) to all other clients
-                usernames_header = f'{len(usernames_string):<{HEADERSIZE}}'.encode('utf-8')
+                usernames_header = f'{len(usernames_string.encode("utf-8")):<{HEADERSIZE}}'.encode('utf-8')
                 client.send(user['header'] + user['data'] \
                             + usernames_header + usernames_string.encode('utf-8'))
 
@@ -88,10 +88,10 @@ while True:
                       sep='\n')
                 
                 #update userlist
-                usernames.remove(clients[current_socket]['data'].decode("utf-8"))
+                usernames.remove(clients[current_socket]['data'].decode('utf-8'))
                 print(usernames)
                 usernames_string = 'USERDISCONNECTED' + ','.join(usernames)#'Affe,Gerti,Katze,..'
-                usernames_header = f'{len(usernames_string):<{HEADERSIZE}}'.encode('utf-8')
+                usernames_header = f'{len(usernames_string.encode("utf-8")):<{HEADERSIZE}}'.encode('utf-8')
                 
                 # Send updated usernames to all other sockets - A Farewell
                 for client_socket in clients:

@@ -3,12 +3,10 @@ import sys
 import os
 import socket
 import errno
-import threading
 
 
 # Socket Stuff
 HEADERSIZE = 10
-
 
 # Setup Window ------------------------------------------------ #
 pygame.init()
@@ -88,44 +86,6 @@ class Button():
             else:
                 action()
             return True
-
-
-def draw_chat_window(chat_history):
-    CHAT_WINDOW.fill((240,240,240))
-    for i, line in enumerate(chat_history):
-        chat_line = CHAT_FONT.render(line, True, (25,25,25))
-        chat_line_rect = chat_line.get_rect()
-        CHAT_WINDOW.blit(chat_line,
-                         ( int(CHAT_WINDOW.get_width()*0.01),
-                           int(HEIGHT*0.65-(chat_line_rect[3]+HEIGHT*0.01)*(len(chat_history)-i))
-                           )
-                         )
-
-
-def draw_user_window(usernames):
-    USER_WINDOW.fill((240,240,240))
-    usernames = usernames.split(',')
-    for i, user in enumerate(usernames):
-        user_line = CHAT_FONT.render(user, True, (25,25,25))
-        user_line_rect = user_line.get_rect()
-        USER_WINDOW.blit(user_line,
-                         ( int(USER_WINDOW.get_width()*0.01),
-                           int(HEIGHT*0.01+(user_line_rect[3]+HEIGHT*0.01)*i)
-                           )
-                         )
-    
-
-def draw_main_window(message_button, username):
-    WINDOW.fill((25,25,25))
-    WINDOW.blit(CHAT_WINDOW, (LEFT_SPACE, int(HEIGHT*0.1)))
-    WINDOW.blit(USER_WINDOW, (LEFT_SPACE+CHAT_WINDOW.get_width()+int(LEFT_SPACE/2),
-                              int(HEIGHT*0.1)))
-    
-    message_button.draw('left')
-    username_label = CHAT_FONT.render(f'You are connected as: {username}', 1, (255, 180, 80))
-    WINDOW.blit(username_label, (LEFT_SPACE, int(HEIGHT*.9)))
-
-    pygame.display.update()
     
 
 def typing(button, message='', align=None, limit=280):
@@ -165,7 +125,8 @@ def connect_to_chat(username, ip, port): #button.msg x 3
         client_socket.connect((ip, int(port)))
         client_socket.setblocking(False) # .recv won't be blocking
         
-        username_header = f'{len(username):<{HEADERSIZE}}'.encode('utf-8')
+
+        username_header = f'{len(username.encode("utf-8")):<{HEADERSIZE}}'.encode('utf-8')
         client_socket.send(username_header + username.encode('utf-8'))
         
         print('Successfully Connected...')
@@ -261,9 +222,70 @@ def menu():
         main_clock.tick(FPS)
 
 
+def draw_chat_window(chat_history, scroll):
+    CHAT_WINDOW.fill((240,240,240))
+
+    if chat_history:
+        sample_line = CHAT_FONT.render(chat_history[0], True, (25,25,25))
+        sample_line_rect = sample_line.get_rect()
+        message_height = (sample_line_rect[3] + HEIGHT*0.01)
+    
+        max_messages = CHAT_WINDOW.get_height() // message_height
+
+        min_scroll = max_messages - len(chat_history)
+
+        if scroll < min_scroll:
+            scroll = min_scroll
+        if scroll > 0:
+            scroll = 0
+        
+        for i, line, in enumerate(chat_history):
+            chat_line = CHAT_FONT.render(line, True, (25,25,25))
+            
+            shift = message_height * (len(chat_history)-i)
+            
+            scroll_shift = message_height * scroll
+            
+            CHAT_WINDOW.blit(chat_line,
+                             ( int(CHAT_WINDOW.get_width()*0.01),
+                               int(HEIGHT*0.65 - shift - scroll_shift)
+                               )
+                             )
+    return scroll
+
+    # *** scroll balken
+
+
+def draw_user_window(usernames):
+    USER_WINDOW.fill((240,240,240))
+    usernames = usernames.split(',')
+    for i, user in enumerate(usernames):
+        user_line = CHAT_FONT.render(user, True, (25,25,25))
+        user_line_rect = user_line.get_rect()
+        USER_WINDOW.blit(user_line,
+                         ( int(USER_WINDOW.get_width()*0.01),
+                           int(HEIGHT*0.01+(user_line_rect[3]+HEIGHT*0.01)*i)
+                           )
+                         )
+    
+
+def draw_main_window(message_button, username):
+    WINDOW.fill((25,25,25))
+    WINDOW.blit(CHAT_WINDOW, (LEFT_SPACE, int(HEIGHT*0.1)))
+    WINDOW.blit(USER_WINDOW, (LEFT_SPACE+CHAT_WINDOW.get_width()+int(LEFT_SPACE/2),
+                              int(HEIGHT*0.1)))
+    
+    message_button.draw('left')
+    username_label = CHAT_FONT.render(f'You are connected as: {username}', 1, (255, 180, 80))
+    WINDOW.blit(username_label, (LEFT_SPACE, int(HEIGHT*.9)))
+
+    pygame.display.update()
+
+
 def chat(client_socket, username):
     chat_history = []
-    usernames = ''    
+    usernames = ''
+    scroll = 0
     message_button = Button(WINDOW,
                             '>',
                             CHAT_FONT,
@@ -285,10 +307,6 @@ def chat(client_socket, username):
                     client_socket.close()
 
                 # Type and send message
-                if event.key ==  pygame.K_BACKSPACE:
-                    if len(message_button.msg) > 1:
-                        message_button.msg = message_button.msg[:-1]
-            
                 elif event.key ==  pygame.K_RETURN:
                     ''' send things to yourself to be available on server side'''
                     if message_button.msg != '>':
@@ -304,6 +322,28 @@ def chat(client_socket, username):
                 else:
                     if len(message_button.msg) < 35:
                         message_button.msg += event.unicode
+
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 4:
+                    scroll += 1 #hoch
+                    
+                elif event.button == 5:
+                        scroll -= 1 #runter
+                        
+        if pygame.key.get_pressed()[pygame.K_UP]:
+            scroll += 1
+        
+        if pygame.key.get_pressed()[pygame.K_DOWN]:
+            scroll -= 1
+
+        if pygame.key.get_pressed()[pygame.K_BACKSPACE]:
+            if len(message_button.msg) > 1:
+                message_button.msg = message_button.msg[:-1]
+
+        # *** timer fürs typing
+                        
+
+            
                     
 
         if run:            
@@ -335,6 +375,9 @@ def chat(client_socket, username):
                 else:
                     print(f'{sender} > {message}')
                     chat_history.append(f'{sender} > {message}')
+                print('usernames:', usernames)
+
+                # *** whisper funktion
                     
 
                     
@@ -352,7 +395,7 @@ def chat(client_socket, username):
 
         # Draw Stuff        
         # draw user window
-        draw_chat_window(chat_history)
+        scroll = draw_chat_window(chat_history, scroll)
         draw_user_window(usernames)
         draw_main_window(message_button, username)
         
