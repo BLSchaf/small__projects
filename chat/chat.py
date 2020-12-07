@@ -27,7 +27,6 @@ MENU_FONT = pygame.font.SysFont('Matura MT Script Capitals',
 CHAT_FONT = pygame.font.SysFont('Matura MT Script Capitals',
                                 min(25, int((HEIGHT/450)*25)), 1)
 
-
 class Button():
     def __init__(self, window, msg, font, x, y, w, h, ac, ic):
         self.window = window
@@ -314,9 +313,24 @@ def chat(client_socket, username):
                         message = message_button.msg.encode('utf-8')
                         message_header = f'{len(message):<{HEADERSIZE}}'.encode('utf-8')
                         client_socket.send(message_header + message)
-                        # also locally append to chat history
-                        print(f'{username} > {message_button.msg}')
-                        chat_history.append(f'{username} > {message_button.msg}')
+                        if not message_button.msg.startswith('/whisper '):
+                            # also locally append to chat history
+                            chat_history.append(f'{username} > {message_button.msg}')
+                            print(f'{username} > {message_button.msg}')
+                            if message_button.msg  == "/":
+                                print('help')
+                        else:
+                            target = message.decode('utf-8').split('"')[1]
+                            print(target)
+                            whisper_message = ''.join(message.decode('utf-8').split('"')[2:]).strip()
+                            print('ok', sender, target, usernames)
+                            if target not in usernames:
+                                chat_history.append(f'{target} not on server')
+                            elif target == sender:
+                                chat_history.append(f'Cannot whisper with yourself')
+                            else:
+                                pass
+                                chat_history.append(f'{username} whispered to {target}: {whisper_message}')
                         message_button.msg = message_button.default_msg
 
                 else:
@@ -372,10 +386,11 @@ def chat(client_socket, username):
                     else:
                         chat_history.append(f'{sender} connected')
                     usernames = message[13:]
+                        
                 else:
                     print(f'{sender} > {message}')
                     chat_history.append(f'{sender} > {message}')
-                print('usernames:', usernames)
+                #print('usernames:', usernames)
 
                 # *** whisper funktion
                     
