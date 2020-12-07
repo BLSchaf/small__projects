@@ -224,7 +224,10 @@ def menu():
 
 def draw_chat_window(chat_history, scroll):
     CHAT_WINDOW.fill((240,240,240))
+    chat_width = CHAT_WINDOW.get_width()
+    chat_height = CHAT_WINDOW.get_height()
 
+    # Messages
     if chat_history:
         sample_line = CHAT_FONT.render(chat_history[0], True, (25,25,25))
         sample_line_rect = sample_line.get_rect()
@@ -232,7 +235,7 @@ def draw_chat_window(chat_history, scroll):
     
         max_messages = CHAT_WINDOW.get_height() // message_height
 
-        min_scroll = max_messages - len(chat_history)
+        min_scroll = min(0, max_messages - len(chat_history))
 
         if scroll < min_scroll:
             scroll = min_scroll
@@ -247,13 +250,37 @@ def draw_chat_window(chat_history, scroll):
             scroll_shift = message_height * scroll
             
             CHAT_WINDOW.blit(chat_line,
-                             ( int(CHAT_WINDOW.get_width()*0.01),
+                             ( int(chat_width*0.01),
                                int(HEIGHT*0.65 - shift - scroll_shift)
                                )
                              )
+
+        # Scrollbalken Stuff if more than max_messages
+        if min_scroll < 0:
+            
+            scroll_width = int(chat_width*0.02)
+            scroll_range = int(chat_height*0.9)
+            
+            # Get smaller the more content - scroll_height is negativ and gets closer to 0
+            scroll_height =  int(-scroll_range*(0.98**-min_scroll))
+            
+            scroll_rect = pygame.Rect(int(chat_width-scroll_width*0.90), int(chat_height*0.95),
+                                      int(scroll_width*0.8), scroll_height)
+                        
+            # Scroll BG
+            pygame.draw.rect(CHAT_WINDOW, (180,180,180),
+                             (chat_width, 0,
+                              -scroll_width, chat_height))
+            
+            # Scroll Rect
+            # Adjust position depending on scroll
+            scroll_ratio = scroll / min_scroll
+            scroll_rect.bottom = scroll_rect.bottom - int(scroll_ratio*(scroll_range+scroll_height))
+            pygame.draw.rect(CHAT_WINDOW, (120,120,120), scroll_rect)
+
     return scroll
 
-    # *** scroll balken
+    
 
 
 def draw_user_window(usernames):
@@ -325,16 +352,16 @@ def chat(client_socket, username):
 
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 4:
-                    scroll += 1 #hoch
+                    scroll -= 1 #hoch
                     
                 elif event.button == 5:
-                        scroll -= 1 #runter
+                    scroll += 1 #runter
                         
         if pygame.key.get_pressed()[pygame.K_UP]:
-            scroll += 1
+            scroll -= 1
         
         if pygame.key.get_pressed()[pygame.K_DOWN]:
-            scroll -= 1
+            scroll += 1
 
         if pygame.key.get_pressed()[pygame.K_BACKSPACE]:
             if len(message_button.msg) > 1:
@@ -378,6 +405,7 @@ def chat(client_socket, username):
                 print('usernames:', usernames)
 
                 # *** whisper funktion
+                # *** multiline text
                     
 
                     
