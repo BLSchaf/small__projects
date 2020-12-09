@@ -223,7 +223,10 @@ def menu():
 
 def draw_chat_window(chat_history, scroll):
     CHAT_WINDOW.fill((240,240,240))
+    chat_width = CHAT_WINDOW.get_width()
+    chat_height = CHAT_WINDOW.get_height()
 
+    # Messages
     if chat_history:
         sample_line = CHAT_FONT.render(chat_history[0], True, (25,25,25))
         sample_line_rect = sample_line.get_rect()
@@ -231,7 +234,7 @@ def draw_chat_window(chat_history, scroll):
     
         max_messages = CHAT_WINDOW.get_height() // message_height
 
-        min_scroll = max_messages - len(chat_history)
+        min_scroll = min(0, max_messages - len(chat_history))
 
         if scroll < min_scroll:
             scroll = min_scroll
@@ -246,13 +249,60 @@ def draw_chat_window(chat_history, scroll):
             scroll_shift = message_height * scroll
             
             CHAT_WINDOW.blit(chat_line,
-                             ( int(CHAT_WINDOW.get_width()*0.01),
+                             ( int(chat_width*0.01),
                                int(HEIGHT*0.65 - shift - scroll_shift)
                                )
                              )
+
+        # Scrollbalken Stuff if more than max_messages
+        if min_scroll < 0:
+            
+            scroll_width = int(chat_width*0.02)
+            scroll_range = int(chat_height*0.9)
+            
+            # Get smaller the more content - scroll_height is negativ and gets closer to 0
+            scroll_height =  int(-scroll_range*(0.98**-min_scroll))
+            
+            scroll_rect = pygame.Rect(int(chat_width-scroll_width*0.90), int(chat_height*0.95),
+                                      int(scroll_width*0.8), scroll_height)
+                        
+            # Scroll BG
+            pygame.draw.rect(CHAT_WINDOW, (180,180,180),
+                             (chat_width, 0,
+                              -scroll_width, chat_height))
+            
+            # Scroll Rect
+            # Adjust position depending on scroll
+            scroll_ratio = scroll / min_scroll
+            scroll_rect.bottom = scroll_rect.bottom - int(scroll_ratio*(scroll_range+scroll_height))
+            pygame.draw.rect(CHAT_WINDOW, (120,120,120), scroll_rect)
+
     return scroll
 
-    # *** scroll balken
+
+def split_message(message):
+    max_length = 50 # WIDTH dependent
+    
+    #print('old:', message)
+    split_message = message.split()
+    #print('split:', split_message)
+    new_lines = []
+
+    line = ''
+    for word in split_message:
+        if line == '':
+            line = word
+        elif len(line) + len(word)+1 <= max_length:
+            line += ' ' + word
+        else:
+            new_lines.append(line)
+            line = '    ' + word
+
+    if line:
+        new_lines.append(line)
+
+    #print('new', new_lines)
+    return new_lines
 
 
 def draw_user_window(usernames):
@@ -292,6 +342,9 @@ def chat(client_socket, username):
                             (240,240,240),(240,240,240),
                             )
     
+    delete_cd = FPS//8
+    delete_timer = delete_cd
+    
     run = True
     while run:
 
@@ -314,6 +367,7 @@ def chat(client_socket, username):
                         message_header = f'{len(message):<{HEADERSIZE}}'.encode('utf-8')
 
                         # also locally append to chat history
+
                         if message_button.msg.startswith('@'):
                             split_message = message.decode('utf-8').split()
                             target = split_message[0][1:]
@@ -323,44 +377,61 @@ def chat(client_socket, username):
                             elif target == username:
                                 chat_history.append(f'Cannot whisper with yourself')
                             else:
-                                chat_history.append(f'{username} whispered to {target}: {whisper_message}')
+                                lines = split_message(f'{username} whispered to {target}: {whisper_message}')
+                                for line in lines:
+                                    chat_history.append(line)
                                 client_socket.send(message_header + message)
                 
                                 
                         else:
                             chat_history.append(f'{username} > {message_button.msg}')
                             print(f'{username} > {message_button.msg}')
+                            lines = split_message(f'{username} > {message_button.msg}')
+                            for line in lines:
+                                chat_history.append(line)
                             client_socket.send(message_header + message)
+
                         message_button.msg = message_button.default_msg
 
+                elif event.key == pygame.K_BACKSPACE:
+                    pass # used in get_pressed() instead
+
                 else:
-                    if len(message_button.msg) < 35:
+                    if len(message_button.msg) < 240:
                         message_button.msg += event.unicode
-                    if  message_button.msg  == ">/":
-                        print('help')
 
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 4:
-                    scroll += 1 #hoch
+                    scroll -= 1 #hoch
                     
                 elif event.button == 5:
-                        scroll -= 1 #runter
-                        
-        if pygame.key.get_pressed()[pygame.K_UP]:
-            scroll += 1
-        
-        if pygame.key.get_pressed()[pygame.K_DOWN]:
-            scroll -= 1
+                    scroll += 1 #runter
 
-        if pygame.key.get_pressed()[pygame.K_BACKSPACE]:
-            if len(message_button.msg) > 1:
-                message_button.msg = message_button.msg[:-1]
-
-        # *** timer fürs typing
-                        
-
-            
+            elif event.type == pygame.KEYUP:
+                if event.key == pygame.K_BACKSPACE:
+                    #reset the timer if delete is released
+                    delete_timer = delete_cd
                     
+                        
+        delete_timer -= 1
+
+        if pygame.key.get_pressed()[pygame.K_UP]:
+            scroll -= 1
+        
+        elif pygame.key.get_pressed()[pygame.K_DOWN]:
+            scroll += 1
+
+        elif pygame.key.get_pressed()[pygame.K_BACKSPACE]:
+            if delete_timer <= 0:
+                delete_timer = delete_cd
+
+                if len(message_button.msg) > 1:
+                    message_button.msg = message_button.msg[:-1]
+
+        # *** timer so naja
+        
+        if  message_button.msg  == ">/":
+            print('help')
 
         if run:            
             try:
@@ -378,6 +449,7 @@ def chat(client_socket, username):
                 message_header = client_socket.recv(HEADERSIZE)
                 message_length = int(message_header.decode('utf-8').strip())
                 message = client_socket.recv(message_length).decode('utf-8')
+                
 
                 if message.startswith('USERDISCONNECTED'):
                     chat_history.append(f'{sender} disconnected')
@@ -391,12 +463,12 @@ def chat(client_socket, username):
                         
                 else:
                     print(f'{sender} > {message}')
-                    chat_history.append(f'{sender} > {message}')
-                #print('usernames:', usernames)
 
-                # *** whisper funktion
-                    
-
+                    lines = split_message(f'{sender} > {message}')
+                    for line in lines:
+                        chat_history.append(line)
+                    #chat_history.append(f'{sender} > {message}')
+                print('usernames:', usernames)
                     
             except IOError as e:
                 if e.errno != errno.EAGAIN and e.errno != errno.EWOULDBLOCK:
