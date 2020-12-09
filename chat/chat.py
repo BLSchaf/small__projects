@@ -27,7 +27,6 @@ MENU_FONT = pygame.font.SysFont('Matura MT Script Capitals',
 CHAT_FONT = pygame.font.SysFont('Matura MT Script Capitals',
                                 min(25, int((HEIGHT/450)*25)), 1)
 
-
 class Button():
     def __init__(self, window, msg, font, x, y, w, h, ac, ic):
         self.window = window
@@ -366,13 +365,32 @@ def chat(client_socket, username):
                         message_button.msg = message_button.msg[1:]
                         message = message_button.msg.encode('utf-8')
                         message_header = f'{len(message):<{HEADERSIZE}}'.encode('utf-8')
-                        client_socket.send(message_header + message)
+
                         # also locally append to chat history
-                        print(f'{username} > {message_button.msg}')
-                        lines = split_message(f'{username} > {message_button.msg}')
-                        for line in lines:
-                            chat_history.append(line)
-                        #chat_history.append(f'{username} > {message_button.msg}')
+
+                        if message_button.msg.startswith('@'):
+                            split_message = message.decode('utf-8').split()
+                            target = split_message[0][1:]
+                            whisper_message = ' '.join(split_message[1:])
+                            if target not in usernames:
+                                chat_history.append(f'{target} not on server')
+                            elif target == username:
+                                chat_history.append(f'Cannot whisper with yourself')
+                            else:
+                                lines = split_message(f'{username} whispered to {target}: {whisper_message}')
+                                for line in lines:
+                                    chat_history.append(line)
+                                client_socket.send(message_header + message)
+                
+                                
+                        else:
+                            chat_history.append(f'{username} > {message_button.msg}')
+                            print(f'{username} > {message_button.msg}')
+                            lines = split_message(f'{username} > {message_button.msg}')
+                            for line in lines:
+                                chat_history.append(line)
+                            client_socket.send(message_header + message)
+
                         message_button.msg = message_button.default_msg
 
                 elif event.key == pygame.K_BACKSPACE:
@@ -381,7 +399,6 @@ def chat(client_socket, username):
                 else:
                     if len(message_button.msg) < 240:
                         message_button.msg += event.unicode
-                        
 
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 4:
@@ -412,6 +429,9 @@ def chat(client_socket, username):
                     message_button.msg = message_button.msg[:-1]
 
         # *** timer so naja
+        
+        if  message_button.msg  == ">/":
+            print('help')
 
         if run:            
             try:
@@ -440,14 +460,15 @@ def chat(client_socket, username):
                     else:
                         chat_history.append(f'{sender} connected')
                     usernames = message[13:]
+                        
                 else:
                     print(f'{sender} > {message}')
+
                     lines = split_message(f'{sender} > {message}')
                     for line in lines:
                         chat_history.append(line)
                     #chat_history.append(f'{sender} > {message}')
-                print('usernames:', usernames)                    
-
+                print('usernames:', usernames)
                     
             except IOError as e:
                 if e.errno != errno.EAGAIN and e.errno != errno.EWOULDBLOCK:

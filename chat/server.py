@@ -58,6 +58,8 @@ while True:
             socket_list.append(client_socket)
             # append client to clients dict
             clients[client_socket] = user #cs{user{header, data}
+
+            
             
             # update userlist
             usernames.append(user['data'].decode('utf-8'))
@@ -81,6 +83,7 @@ while True:
             ''' Everything that happens for clients (select acts like thread?)'''
             # current client (socket in list) receives from itself ???
             message = receive_message(current_socket) # this is a dict
+            print(message)
 
             if not message:
                 print(time.asctime(),
@@ -106,17 +109,27 @@ while True:
             if not message["data"]:
                 continue
 
+            if message['data'].decode('utf-8').startswith('@'):
+                whisper_message = True
+                target = message['data'].decode('utf-8').split()[0][1:]
+    
             else:
                 user = clients[current_socket]
                 print(time.asctime(),
                       f'Received message from {user["data"].decode("utf-8")}: {message["data"].decode("utf-8")}',
                       sep='\n')
-
+                
+                    
+                
+            
             for client in clients:
                 if client != current_socket:
-                    # Send message (from current socket to itself) to all other sockets
-                    client.send(user['header'] + user['data'] + message['header'] + message ['data'])
-                    
+                    if whisper_message:
+                        if target == clients[client]['data'].decode('utf-8'):
+                            client.send(user['header'] + user['data'] + message['header'] + message ['data'])
+                    else: # Send message (from current socket to itself) to all other sockets
+                        client.send(user['header'] + user['data'] + message['header'] + message ['data'])
+
               
     for current_socket in exception_sockets:
         socket_list.remove(current_socket)
