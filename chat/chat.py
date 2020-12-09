@@ -280,7 +280,30 @@ def draw_chat_window(chat_history, scroll):
 
     return scroll
 
+
+def split_message(message):
+    max_length = 50 # WIDTH dependent
     
+    #print('old:', message)
+    split_message = message.split()
+    #print('split:', split_message)
+    new_lines = []
+
+    line = ''
+    for word in split_message:
+        if line == '':
+            line = word
+        elif len(line) + len(word)+1 <= max_length:
+            line += ' ' + word
+        else:
+            new_lines.append(line)
+            line = '    ' + word
+
+    if line:
+        new_lines.append(line)
+
+    #print('new', new_lines)
+    return new_lines
 
 
 def draw_user_window(usernames):
@@ -320,6 +343,9 @@ def chat(client_socket, username):
                             (240,240,240),(240,240,240),
                             )
     
+    delete_cd = FPS//8
+    delete_timer = delete_cd
+    
     run = True
     while run:
 
@@ -343,12 +369,19 @@ def chat(client_socket, username):
                         client_socket.send(message_header + message)
                         # also locally append to chat history
                         print(f'{username} > {message_button.msg}')
-                        chat_history.append(f'{username} > {message_button.msg}')
+                        lines = split_message(f'{username} > {message_button.msg}')
+                        for line in lines:
+                            chat_history.append(line)
+                        #chat_history.append(f'{username} > {message_button.msg}')
                         message_button.msg = message_button.default_msg
 
+                elif event.key == pygame.K_BACKSPACE:
+                    pass # used in get_pressed() instead
+
                 else:
-                    if len(message_button.msg) < 35:
+                    if len(message_button.msg) < 240:
                         message_button.msg += event.unicode
+                        
 
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 4:
@@ -356,22 +389,29 @@ def chat(client_socket, username):
                     
                 elif event.button == 5:
                     scroll += 1 #runter
+
+            elif event.type == pygame.KEYUP:
+                if event.key == pygame.K_BACKSPACE:
+                    #reset the timer if delete is released
+                    delete_timer = delete_cd
+                    
                         
+        delete_timer -= 1
+
         if pygame.key.get_pressed()[pygame.K_UP]:
             scroll -= 1
         
-        if pygame.key.get_pressed()[pygame.K_DOWN]:
+        elif pygame.key.get_pressed()[pygame.K_DOWN]:
             scroll += 1
 
-        if pygame.key.get_pressed()[pygame.K_BACKSPACE]:
-            if len(message_button.msg) > 1:
-                message_button.msg = message_button.msg[:-1]
+        elif pygame.key.get_pressed()[pygame.K_BACKSPACE]:
+            if delete_timer <= 0:
+                delete_timer = delete_cd
 
-        # *** timer fürs typing
-                        
+                if len(message_button.msg) > 1:
+                    message_button.msg = message_button.msg[:-1]
 
-            
-                    
+        # *** timer so naja
 
         if run:            
             try:
@@ -389,6 +429,7 @@ def chat(client_socket, username):
                 message_header = client_socket.recv(HEADERSIZE)
                 message_length = int(message_header.decode('utf-8').strip())
                 message = client_socket.recv(message_length).decode('utf-8')
+                
 
                 if message.startswith('USERDISCONNECTED'):
                     chat_history.append(f'{sender} disconnected')
@@ -401,12 +442,11 @@ def chat(client_socket, username):
                     usernames = message[13:]
                 else:
                     print(f'{sender} > {message}')
-                    chat_history.append(f'{sender} > {message}')
-                print('usernames:', usernames)
-
-                # *** whisper funktion
-                # *** multiline text
-                    
+                    lines = split_message(f'{sender} > {message}')
+                    for line in lines:
+                        chat_history.append(line)
+                    #chat_history.append(f'{sender} > {message}')
+                print('usernames:', usernames)                    
 
                     
             except IOError as e:
