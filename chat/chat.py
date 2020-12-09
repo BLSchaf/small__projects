@@ -369,10 +369,11 @@ def chat(client_socket, username):
                         # also locally append to chat history
 
                         if message_button.msg.startswith('@'):
-                            split_message = message.decode('utf-8').split()
-                            target = split_message[0][1:]
-                            whisper_message = ' '.join(split_message[1:])
+                            message_list = message.decode('utf-8').split()
+                            target = message_list[0][1:]
+                            whisper_message = ' '.join(message_list[1:])
                             if target not in usernames:
+                                # *** 'enter' is in 'enter name' allow no spaces in name anyway
                                 chat_history.append(f'{target} not on server')
                             elif target == username:
                                 chat_history.append(f'Cannot whisper with yourself')
