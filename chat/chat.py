@@ -312,30 +312,32 @@ def chat(client_socket, username):
                         message_button.msg = message_button.msg[1:]
                         message = message_button.msg.encode('utf-8')
                         message_header = f'{len(message):<{HEADERSIZE}}'.encode('utf-8')
-                        client_socket.send(message_header + message)
-                        if not message_button.msg.startswith('/whisper '):
-                            # also locally append to chat history
-                            chat_history.append(f'{username} > {message_button.msg}')
-                            print(f'{username} > {message_button.msg}')
-                            if message_button.msg  == "/":
-                                print('help')
-                        else:
-                            target = message.decode('utf-8').split('"')[1]
-                            print(target)
-                            whisper_message = ''.join(message.decode('utf-8').split('"')[2:]).strip()
-                            print('ok', sender, target, usernames)
+
+                        # also locally append to chat history
+                        if message_button.msg.startswith('@'):
+                            split_message = message.decode('utf-8').split()
+                            target = split_message[0][1:]
+                            whisper_message = ' '.join(split_message[1:])
                             if target not in usernames:
                                 chat_history.append(f'{target} not on server')
-                            elif target == sender:
+                            elif target == username:
                                 chat_history.append(f'Cannot whisper with yourself')
                             else:
-                                pass
                                 chat_history.append(f'{username} whispered to {target}: {whisper_message}')
+                                client_socket.send(message_header + message)
+                
+                                
+                        else:
+                            chat_history.append(f'{username} > {message_button.msg}')
+                            print(f'{username} > {message_button.msg}')
+                            client_socket.send(message_header + message)
                         message_button.msg = message_button.default_msg
 
                 else:
                     if len(message_button.msg) < 35:
                         message_button.msg += event.unicode
+                    if  message_button.msg  == ">/":
+                        print('help')
 
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 4:
